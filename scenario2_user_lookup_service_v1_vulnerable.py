@@ -1,126 +1,117 @@
 """
-scenario2_user_lookup_service_v1_vulnerable.py
-Senaryo 2 V1: Aynı dosyanın zafiyetli ilk hali.
-İlk merge için kullanılır. Review fail + revert beklenir.
+scenario2_user_lookup_service.py
+
+Senaryo 2 - V2 DÜZELTİLMİŞ HAL
+Aynı dosyada zafiyetli satırlar temizlendi.
+Beklenen: review success + dev_mergeable=true
 """
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse, parse_qs
-import sqlite3, json, os, hashlib, random, subprocess
 
-DB = "scenario2_users.db"
+import sqlite3
+import hashlib
+import secrets
 
-# ZAFİYET-01: Hardcoded secret
-APP_SECRET = "scenario2-hardcoded-secret"
+DB_NAME = "scenario2_users.db"
 
-# ZAFİYET-02: Hardcoded admin credentials
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin123"
+
+def hash_password(password):
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
 
 def init_db():
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS users(id INTEGER, username TEXT, password TEXT, role TEXT, private_note TEXT)")
-    cur.execute("DELETE FROM users")
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
-    # ZAFİYET-03: Plain text password storage
-    cur.execute("INSERT INTO users VALUES(1,'admin','admin123','admin','internal admin note')")
-    cur.execute("INSERT INTO users VALUES(2,'kerem','123456','user','normal user note')")
-    con.commit()
-    con.close()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE,
+            password_hash TEXT,
+            role TEXT
+        )
+    """)
 
-class Handler(BaseHTTPRequestHandler):
-    def send_json(self, data, status=200):
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+    cursor.execute("DELETE FROM users")
 
-        # ZAFİYET-04: CORS wildcard
-        self.send_header("Access-Control-Allow-Origin", "*")
+    users = [
+        (1, "admin", hash_password("admin123"), "admin"),
+        (2, "kerem", hash_password("123456"), "user"),
+    ]
 
-        self.end_headers()
-        self.wfile.write(json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8"))
+    cursor.executemany(
+        "INSERT INTO users VALUES (?, ?, ?, ?)",
+        users
+    )
 
-    def parse(self):
-        parsed = urlparse(self.path)
-        return parsed.path, parse_qs(parsed.query)
+    conn.commit()
+    conn.close()
 
-    def do_GET(self):
-        path, q = self.parse()
 
-        if path == "/":
-            return self.send_json({"routes": ["/login", "/user", "/search", "/run", "/config"]})
+def login(username, password):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
-        if path == "/login":
-            username = q.get("username", [""])[0]
-            password = q.get("password", [""])[0]
+    cursor.execute(
+        "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+        (username,)
+    )
 
-            # ZAFİYET-05: Credentials in URL
-            # ZAFİYET-06: Sensitive data logging
-            open("scenario2_login.log", "a", encoding="utf-8").write(f"{username}:{password}\n")
+    user = cursor.fetchone()
+    conn.close()
 
-            con = sqlite3.connect(DB)
-            cur = con.cursor()
+    if not user:
+        return {"success": False, "message": "Invalid credentials"}
 
-            # ZAFİYET-07: SQL Injection
-            cur.execute(f"SELECT id, username, role FROM users WHERE username='{username}' AND password='{password}'")
-            user = cur.fetchone()
-            con.close()
+    expected_password_hash = user[2]
 
-            if not user:
-                return self.send_json({"error": "Invalid credentials"}, 401)
+    if hash_password(password) != expected_password_hash:
+        return {"success": False, "message": "Invalid credentials"}
 
-            # ZAFİYET-08: Predictable token generation
-            random.seed(username)
+    token = secrets.token_urlsafe(32)
 
-            # ZAFİYET-09: Weak hash algorithm
-            token = hashlib.md5(f"{username}-{random.randint(1000,9999)}-{APP_SECRET}".encode()).hexdigest()
+    return {
+        "success": True,
+        "user": {
+            "id": user[0],
+            "username": user[1],
+            "role": user[3]
+        },
+        "token": token
+    }
 
-            return self.send_json({"user": user, "token": token})
 
-        if path == "/user":
-            user_id = q.get("id", ["0"])[0]
-            con = sqlite3.connect(DB)
-            cur = con.cursor()
+def get_user(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
-            # ZAFİYET-10: SQL Injection
-            cur.execute(f"SELECT id, username, password, role, private_note FROM users WHERE id={user_id}")
-            row = cur.fetchone()
-            con.close()
+    cursor.execute(
+        "SELECT id, username, role FROM users WHERE id = ?",
+        (user_id,)
+    )
 
-            # ZAFİYET-11: Sensitive data exposure
-            return self.send_json({"user": row})
+    user = cursor.fetchone()
+    conn.close()
 
-        if path == "/search":
-            keyword = q.get("q", [""])[0]
-            con = sqlite3.connect(DB)
-            cur = con.cursor()
+    if not user:
+        return None
 
-            # ZAFİYET-12: SQL Injection in LIKE query
-            sql = f"SELECT id, username, role FROM users WHERE username LIKE '%{keyword}%'"
-            cur.execute(sql)
-            rows = cur.fetchall()
-            con.close()
-            return self.send_json({"sql": sql, "results": rows})
+    return {
+        "id": user[0],
+        "username": user[1],
+        "role": user[2]
+    }
 
-        if path == "/run":
-            command = q.get("cmd", ["echo scenario2"])[0]
 
-            # ZAFİYET-13: Command Injection
-            return self.send_json({"output": subprocess.check_output(command, shell=True, text=True)})
-
-        if path == "/config":
-            # ZAFİYET-14: Configuration exposure
-            return self.send_json({
-                "app_secret": APP_SECRET,
-                "admin_username": ADMIN_USERNAME,
-                "admin_password": ADMIN_PASSWORD,
-                "cwd": os.getcwd()
-            })
-
-        # ZAFİYET-15: Verbose error
-        return self.send_json({"error": "Route not found", "path": path}, 404)
-
-if __name__ == "__main__":
+def main():
     init_db()
 
-    # ZAFİYET-16: Public binding
-    HTTPServer(("0.0.0.0", 5901), Handler).serve_forever()
+    print("Fixed user lookup service started.")
+
+    result = login("admin", "admin123")
+    print("Login result:", result)
+
+    user = get_user(1)
+    print("User detail:", user)
+
+
+if __name__ == "__main__":
+    main()
