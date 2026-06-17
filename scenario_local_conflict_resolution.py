@@ -5,28 +5,22 @@ from pathlib import Path
 BASE_PROFILE_DIR = Path("profiles").resolve()
 
 def get_user_by_username(username):
-    # PART 1 - VULNERABLE: SQL injection
+    # PART 1 - SAFE
     conn = sqlite3.connect("app.db")
     cursor = conn.cursor()
 
-    query = "SELECT id, username, email FROM users WHERE username = '" + username + "'"
-    cursor.execute(query)
+    query = "SELECT id, username, email FROM users WHERE username = ?"
+    cursor.execute(query, (username,))
 
     return cursor.fetchone()
 
 
 def run_report_action(action_name):
-    # PART 2 - SAFE
-    allowed_actions = {
-        "daily": "generate_daily_report",
-        "weekly": "generate_weekly_report",
-    }
+    # PART 2 - VULNERABLE: command injection
+    command = "python reports.py --type " + action_name
+    os.system(command)
 
-    action = allowed_actions.get(action_name)
-    if action is None:
-        raise ValueError("Unsupported report action")
-
-    return f"Running safe action: {action}"
+    return "Report command executed"
 
 
 def read_profile_file(filename):
