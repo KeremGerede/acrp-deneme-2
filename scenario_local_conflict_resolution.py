@@ -16,11 +16,17 @@ def get_user_by_username(username):
 
 
 def run_report_action(action_name):
-    # PART 2 - VULNERABLE: command injection
-    command = "python reports.py --type " + action_name
-    os.system(command)
+    # PART 2 - SAFE
+    allowed_actions = {
+        "daily": "generate_daily_report",
+        "weekly": "generate_weekly_report",
+    }
 
-    return "Report command executed"
+    action = allowed_actions.get(action_name)
+    if action is None:
+        raise ValueError("Unsupported report action")
+
+    return f"Running safe action: {action}"
 
 
 def read_profile_file(filename):
