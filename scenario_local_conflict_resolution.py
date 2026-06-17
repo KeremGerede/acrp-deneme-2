@@ -16,11 +16,18 @@ def get_user_by_username(username):
 
 
 def run_report_action(action_name):
-    # PART 2 - VULNERABLE: command injection
-    command = "python reports.py --type " + action_name
-    os.system(command)
+    # PART 2 - SAFE
+    allowed_actions = {
+        "daily": "generate_daily_report",
+        "weekly": "generate_weekly_report",
+        "monthly": "generate_monthly_report",
+    }
 
-    return "Report command executed"
+    action = allowed_actions.get(action_name)
+    if action is None:
+        raise ValueError("Unsupported report action")
+
+    return f"Running safe action: {action}"
 
 
 def read_profile_file(filename):
@@ -32,3 +39,14 @@ def read_profile_file(filename):
 
     with open(requested_path, "r", encoding="utf-8") as file:
         return file.read()
+
+
+def create_audit_message(username, action_name):
+    # PART 4 - SAFE: new clean functionality
+    if not username or not action_name:
+        raise ValueError("username and action_name are required")
+
+    safe_username = username.strip()
+    safe_action = action_name.strip()
+
+    return f"Audit log prepared for user={safe_username}, action={safe_action}"
