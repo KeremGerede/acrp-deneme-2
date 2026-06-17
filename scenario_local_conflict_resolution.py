@@ -5,12 +5,12 @@ from pathlib import Path
 BASE_PROFILE_DIR = Path("profiles").resolve()
 
 def get_user_by_username(username):
-    # PART 1 - VULNERABLE: SQL injection
+    # PART 1 - SAFE
     conn = sqlite3.connect("app.db")
     cursor = conn.cursor()
 
-    query = "SELECT id, username, email FROM users WHERE username = '" + username + "'"
-    cursor.execute(query)
+    query = "SELECT id, username, email FROM users WHERE username = ?"
+    cursor.execute(query, (username,))
 
     return cursor.fetchone()
 
