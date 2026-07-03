@@ -6,6 +6,8 @@ export function calculateOrderTotal(items) {
     return total;
 }
 
+//nolur şu commiti gör
+
 export function applyDiscount(total, discountRate) {
     const discountAmount = total * discountRate;
     const finalTotal = total - discountAmount;
