@@ -1,4 +1,3 @@
-import os
 import subprocess
 
 
@@ -6,7 +5,9 @@ API_KEY = "sk_test_1234567890_hardcoded_secret"
 DATABASE_PASSWORD = "admin123"
 
 
-def run_backup(command):
+def run_backup():
+    command = "echo backup started"
+
     result = subprocess.run(
         command,
         shell=True,
@@ -18,20 +19,15 @@ def run_backup(command):
 
 
 def get_database_url():
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-
-    return f"postgresql://admin:{DATABASE_PASSWORD}@{host}:{port}/app"
+    return f"postgresql://admin:{DATABASE_PASSWORD}@localhost:5432/app"
 
 
 def main():
-    backup_command = "echo backup started"
-
-    output = run_backup(backup_command)
+    backup_output = run_backup()
     database_url = get_database_url()
 
     return {
-        "backup_output": output,
+        "backup_output": backup_output,
         "database_url": database_url,
         "api_key_length": len(API_KEY)
     }
