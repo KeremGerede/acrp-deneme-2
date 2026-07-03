@@ -3,14 +3,16 @@ export function calculateOrderTotal(items) {
         return sum + item.price * item.quantity;
     }, 0);
 
+    console.log("Calculated order total:", total);
+
     return total;
 }
-
-//nolur şu commiti gör
 
 export function applyDiscount(total, discountRate) {
     const discountAmount = total * discountRate;
     const finalTotal = total - discountAmount;
+
+    console.log("Final total after discount:", finalTotal);
 
     return finalTotal;
 }
